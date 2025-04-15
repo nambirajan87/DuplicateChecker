@@ -125,24 +125,33 @@ if st.session_state.get("report_generated", False):
         "Similarity_Score": "Score (%)"
     }
 
-    for tab, sheet_name in zip(sheet_tabs, excel_file.sheet_names):
+    for idx, (tab, sheet_name) in enumerate(zip(sheet_tabs, excel_file.sheet_names)):
         with tab:
             df_sheet = excel_file.parse(sheet_name)
+
+            # Step 1: Remove "matched{sheet_name}" from column names
             df_sheet.columns = [
                 col.replace(f"Matched{sheet_name}", "") if f"Matched{sheet_name}" in col else col
                 for col in df_sheet.columns
             ]
+
+            # Step 2: Rename known columns
             df_sheet.rename(
                 columns={k: v for k, v in rename_columns.items() if k in df_sheet.columns},
                 inplace=True
             )
 
+            
+            # Display table with horizontal scroll - now with unique keys
+            unique_key = f"data_editor_{sheet_name}_{idx}"  # Added idx to make key unique
             st.data_editor(
                 df_sheet,
                 column_config={
-                    col: st.column_config.Column(width="small") for col in df_sheet.columns
+                    col: st.column_config.Column(width="small") 
+                    for col in df_sheet.columns
                 },
-                disabled=True
+                disabled=True,
+                key=unique_key  # Using the unique key
             )
 
     with open(filename, "rb") as f:
