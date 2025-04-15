@@ -17,10 +17,18 @@ if "results_data" not in st.session_state:
 if "show_table" not in st.session_state:
     st.session_state["show_table"] = False
 
+if "report_generated" not in st.session_state:
+    st.session_state["report_generated"] = False
+
+if "report_filename" not in st.session_state:
+    st.session_state["report_filename"] = ""
+
 def reset_inputs():
     st.session_state["textarea_content"] = ""
     st.session_state["results_data"] = []
     st.session_state["show_table"] = False
+    st.session_state["report_generated"] = False
+    st.session_state["report_filename"] = ""
     for key in list(st.session_state.keys()):
         if key.startswith("checkbox_verified_"):
             del st.session_state[key]
@@ -55,6 +63,7 @@ if st.button("Go To Next", disabled=disabled):
     with st.spinner("Checking..."):
         st.session_state["results_data"] = get_page_titles(valid_urls)
         st.session_state["show_table"] = True
+        st.session_state["report_generated"] = False  # Reset previous report if any
 
 # Results table with checkboxes
 if st.session_state["show_table"]:
@@ -63,9 +72,7 @@ if st.session_state["show_table"]:
 
     df = pd.DataFrame(st.session_state["results_data"])
     selected_urls = []
-    updated_rows = []
 
-    # Styling the table to enhance appearance
     for idx, row in df.iterrows():
         url_key = f"checkbox_verified_{idx}"
         if url_key not in st.session_state:
@@ -86,7 +93,6 @@ if st.session_state["show_table"]:
         st.subheader("🔗 Verified URL Combinations Preview")
         combination_list = list(combinations(selected_urls, 2))
 
-        # Style for the combinations matrix
         for i, (url1, url2) in enumerate(combination_list):
             col1, col2 = st.columns([6, 6])
             with col1:
@@ -99,46 +105,45 @@ if st.session_state["show_table"]:
         st.subheader("🔝 Top N Similar Word to Test")
         top_n = st.radio("Select N:", options=[1, 2, 3, 4, 5], index=2, horizontal=True)
 
-        # Button to check duplicates
-        # Button to check duplicates
-if st.button("🔁 Check Duplicate"):
-    with st.spinner("Analyzing URLs and generating report..."):
-        filename = generate_similarity_excel(selected_urls, top_n=top_n)
-        st.success("✅ Report generated successfully!")
+        # Generate report
+        if st.button("🔁 Check Duplicate"):
+            with st.spinner("Analyzing URLs and generating report..."):
+                filename = generate_similarity_excel(selected_urls, top_n=top_n)
+                st.session_state["report_filename"] = filename
+                st.session_state["report_generated"] = True
+                st.success("✅ Report generated successfully!")
 
-        excel_file = pd.ExcelFile(filename)
-        sheet_tabs = st.tabs(excel_file.sheet_names)
+# Show report if already generated
+if st.session_state.get("report_generated", False):
+    filename = st.session_state["report_filename"]
+    excel_file = pd.ExcelFile(filename)
+    sheet_tabs = st.tabs(excel_file.sheet_names)
 
-        rename_columns = {
-            "URL_1": "Primary URL",
-            "URL_2": "Compared URL",
-            "Similarity_Score": "Score (%)"
-            # Add more if needed
-        }
+    rename_columns = {
+        "URL_1": "Primary URL",
+        "URL_2": "Compared URL",
+        "Similarity_Score": "Score (%)"
+    }
 
-        for tab, sheet_name in zip(sheet_tabs, excel_file.sheet_names):
-            with tab:
-                df_sheet = excel_file.parse(sheet_name)
+    for tab, sheet_name in zip(sheet_tabs, excel_file.sheet_names):
+        with tab:
+            df_sheet = excel_file.parse(sheet_name)
+            df_sheet.columns = [
+                col.replace(f"Matched{sheet_name}", "") if f"Matched{sheet_name}" in col else col
+                for col in df_sheet.columns
+            ]
+            df_sheet.rename(
+                columns={k: v for k, v in rename_columns.items() if k in df_sheet.columns},
+                inplace=True
+            )
 
-                # Step 1: Remove "matched{sheet_name}" from column names
-                df_sheet.columns = [
-                    col.replace(f"Matched{sheet_name}", "") if f"Matched{sheet_name}" in col else col
-                    for col in df_sheet.columns
-                ]
+            st.data_editor(
+                df_sheet,
+                column_config={
+                    col: st.column_config.Column(width="small") for col in df_sheet.columns
+                },
+                disabled=True
+            )
 
-                # Step 2: Rename known columns
-                df_sheet.rename(
-                    columns={k: v for k, v in rename_columns.items() if k in df_sheet.columns},
-                    inplace=True
-                )
-
-                # Display table with horizontal scroll
-                st.data_editor(
-                    df_sheet,
-                    column_config={col: st.column_config.Column(width="small") for col in df_sheet.columns},
-                    disabled=True,
-                    key=f"data_editor_{sheet_name}"  # Use sheet_name as the key
-                )
-
-        with open(filename, "rb") as f:
-            st.download_button("📥 Download Excel Report", f, file_name=filename)
+    with open(filename, "rb") as f:
+        st.download_button("📥 Download Excel Report", f, file_name=filename, key="download_report")
