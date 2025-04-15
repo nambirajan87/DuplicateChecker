@@ -3,6 +3,7 @@ import pandas as pd
 from itertools import combinations
 from backend import validate_urls, get_page_titles
 from DCReportv5 import generate_similarity_excel
+import time
 
 st.set_page_config(page_title="Plagiarism Checker", layout="wide")
 st.title("🔍 Plagiarism Checker")
@@ -117,6 +118,8 @@ if st.session_state["show_table"]:
 if st.session_state.get("report_generated", False):
     filename = st.session_state["report_filename"]
     excel_file = pd.ExcelFile(filename)
+    # Create unique tab IDs
+    tab_ids = [f"tab_{i}_{sheet}" for i, sheet in enumerate(excel_file.sheet_names)]
     sheet_tabs = st.tabs(excel_file.sheet_names)
 
     rename_columns = {
@@ -142,8 +145,9 @@ if st.session_state.get("report_generated", False):
             )
 
             
-            # Display table with horizontal scroll - now with unique keys
-            unique_key = f"data_editor_{sheet_name}_{idx}"  # Added idx to make key unique
+
+            # Create unique key for each data editor using timestamp
+            unique_key = f"editor_{sheet_name}_{idx}_{int(time.time())}"
             st.data_editor(
                 df_sheet,
                 column_config={
@@ -151,8 +155,15 @@ if st.session_state.get("report_generated", False):
                     for col in df_sheet.columns
                 },
                 disabled=True,
-                key=unique_key  # Using the unique key
+                key=unique_key
             )
 
+    # Unique key for download button
+    download_key = f"download_{int(time.time())}"
     with open(filename, "rb") as f:
-        st.download_button("📥 Download Excel Report", f, file_name=filename, key="download_report")
+        st.download_button(
+            "📥 Download Excel Report", 
+            f, 
+            file_name=filename, 
+            key=download_key
+        )
